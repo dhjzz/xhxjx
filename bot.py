@@ -1,0 +1,64 @@
+import asyncio
+from datetime import datetime
+from collections import defaultdict
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+
+# Импортируем токен из отдельного файла
+from config import BOT_TOKEN
+
+# Инициализация
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+# Хранилище активности
+daily_stats = defaultdict(int)
+current_date = datetime.now().date()
+
+# ===== СБРОС СТАТИСТИКИ =====
+async def reset_stats_if_needed():
+    global daily_stats, current_date
+    today = datetime.now().date()
+    if today != current_date:
+        daily_stats.clear()
+        current_date = today
+
+# ===== УЧЁТ АКТИВНОСТИ =====
+@dp.message()
+async def track_activity(message: types.Message):
+    await reset_stats_if_needed()
+    daily_stats[message.from_user.id] += 1
+
+# ===== КОМАНДА /ACTIV =====
+@dp.message(Command("activ"))
+async def show_activ(message: types.Message):
+    await reset_stats_if_needed()
+    
+    if not daily_stats:
+        await message.reply("📭 Сегодня пока нет сообщений.")
+        return
+    
+    # Находим самого активного
+    most_active_id = max(daily_stats, key=daily_stats.get)
+    max_msgs = daily_stats[most_active_id]
+    
+    # Получаем username или делаем ссылку
+    try:
+        user = await bot.get_chat(most_active_id)
+        username = user.username
+        mention = f"@{username}" if username else f"[Пользователь](tg://user?id={most_active_id})"
+    except:
+        mention = f"[Пользователь](tg://user?id={most_active_id})"
+    
+    await message.reply(
+        f"🏆 Самый активный сегодня: {mention}\n💬 Сообщений: {max_msgs}",
+        parse_mode="Markdown"
+    )
+
+# ===== ЗАПУСК =====
+async def main():
+    print("✅ Бот запущен")
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
